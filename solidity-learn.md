@@ -303,7 +303,7 @@ contract Ballot {
 }
 ```
 
-几个疑问： view   storage 关键词作用  
+几个疑问： view   storage 关键词作用  、?	
 
 ### 可能的优化
 
@@ -442,7 +442,7 @@ contract SimpleAuction {
 pragma solidity >0.4.23 <0.5.0;
 
 contract BlindAuction {
-    struct Bid {
+    struct Bid {  // 
         bytes32 blindedBid;
         uint deposit;
     }
@@ -671,7 +671,6 @@ contract Purchase {
     }
 }
 ```
-
 
 
 
