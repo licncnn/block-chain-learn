@@ -674,64 +674,824 @@ contract Purchase {
 
 
 
+## 深入理解Solidity
+
+### 源文件结构
+
+**结构**
+
+```js
+pragma solidity ^0.4.0;
+```
+
+源文件将既不允许低于 0.4.0 版本的编译器编译， 也不允许高于（包含） `0.5.0` 版本的编译器编译（第二个条件因使用 `^` 被添加）。 这种做法的考虑是，编译器在 0.5.0 版本之前不会有重大变更，所以可确保源代码始终按预期被编译。
+
+**导入**
+
+```js
+import {symbol1 as alias, symbol2} from "filename";
+...创建新的全局符号 alias 和 symbol2，分别从 "filename" 引用 symbol1 和 symbol2 。
+```
+
+
+
+```js
+import * as symbolName from "filename";
+创建一个新的全局符号 symbolName，其成员均来自 "filename" 中全局符号。
+```
+
+
+
+```js
+import "filename";
+此语句将从 “filename” 中导入所有的全局符号到当前全局作用域中（不同于 ES6，Solidity 是向后兼容的）。
+```
+
+
+
+用 `import "./x" as x;` 语句导入当前源文件同目录下的文件 `x` 。 如果用 `import "x" as x;` 代替，可能会引入不同的文件（在全局 `include directory` 中）。
+
+```js
+import "github.com/ethereum/dapp-bin/library/iterable_mapping.sol" as it_mapping;
+solc:
+solc module1:github.com/ethereum/dapp-bin/=/usr/local/dapp-bin/ \
+module2:github.com/ethereum/dapp-bin/=/usr/local/dapp-bin_old/ \
+source.sol
+```
+
+
+
+有另一种注释称为 natspec 注释，其文档还尚未编写。 它们是用三个反斜杠（`///`）或双星号开头的块（`/** ... */`）书写，它们应该直接在函数声明或语句上使用。
+
+文档化函数、 标注形式校验通过的条件，和提供一个当用户试图调用一个函数时显示给用户的 **确认文本**。
+
+```js
+pragma solidity ^0.4.0;
+
+/** @title 形状计算器。 */
+contract shapeCalculator {
+    /** @dev 求矩形表明面积与周长。
+    * @param w 矩形宽度。
+    * @param h 矩形高度。
+    * @return s 求得表面积。
+    * @return p 求得周长。
+    */
+    function rectangle(uint w, uint h) returns (uint s, uint p) {
+        s = w * h;
+        p = 2 * (w + h);
+    }
+}
+```
 
 
 
 
 
+### 合约结构
+
+```js
+状态变量是永久地存储在合约存储中的值。
+uint storedData; // 状态变量
+
+函数调用 可发生在合约内部或外部，且函数对其他合约有不同程度的可见性（ 可见性和 getter 函数）。
+function bid() public payable { // 函数
+        // ...
+}
+
+函数修饰器可以用来以声明的方式改良函数语义
+modifier onlySeller() { // 修饰器
+        require(
+            msg.sender == seller,
+            "Only seller can call this."
+        );
+        _;
+    }
+
+事件是能方便地调用以太坊虚拟机日志功能的接口。
+    event HighestBidIncreased(address bidder, uint amount); // 事件
+    function bid() public payable {
+        // ...
+        emit HighestBidIncreased(msg.sender, msg.value); // 触发事件
+    }
+
+struct Voter { // 结构
+        uint weight;
+        bool voted;
+        address delegate;
+        uint vote;
+    }
+
+枚举可用来创建由一定数量的“常量值”构成的自定义类型
+enum State { Created, Locked, Inactive } // 枚举
+```
+
+### **类型**
+
+```js
+bool ：可能的取值为字面常数值 true 和 false 。
+
+! （逻辑非）
+&& （逻辑与， "and" ）
+|| （逻辑或， "or" ）
+== （等于）
+!= （不等于）
+
+int / uint ：分别表示有符号和无符号的不同位数的整型变量。 
+支持关键字 uint8 到 uint256 （无符号，从 8 位到 256 位）以及 int8 到 int256，以 8 位为步长递增。 
+uint 和 int 分别是 uint256 和 int256 的别名。
+
+比较运算符： <= ， < ， == ， != ， >= ， > （返回布尔值）
+位运算符： & ， | ， ^ （异或）， ~ （位取反）
+
+除法总是会截断的（仅被编译为 EVM 中的 DIV 操作码）， 但如果操作数都是 字面常数（literals） （或者字面常数表达式），则不会截断。
+除以零或者模零运算都会引发运行时异常。
+移位运算的结果取决于运算符左边的类型。 表达式 x << y 与 x * 2**y 是等价的， x >> y 与 x / 2**y 是等价的。这意味对一个负数进行移位会导致其符号消失。 按负数位移动会引发运行时异常。
+warning:
+	由有符号整数类型负值右移所产生的结果跟其它语言中所产生的结果是不同的。 在 Solidity 中，右移和除是等价的，因此对一个负数进行右移操作会导致向 0 的取整（截断）。 而在其它语言中， 对负数进行右移类似于（向负无穷）取整。
+    
+百度：负数的移位计算  https://www.cnblogs.com/oldfish123/p/14941113.html
+先转化成补码，左移运算一律在右端补0，右移运算一律在左端补符号数(负数符号位为1就补1，正数符号位为0就补0)
+特别注意溢出问题：负数移位溢出之后的值一律为-1，正数移位溢出之后的值一律为0
+```
+
+
+
+`fixed` / `ufixed`：表示各种大小的有符号和无符号的定长浮点型。 在关键字 `ufixedMxN` 和 `fixedMxN` 中，`M` 表示该类型占用的位数，`N` 表示可用的小数位数。 `M` 必须能整除 8，即 8 到 256 位。 `N` 则可以是从 0 到 80 之间的任意数。 `ufixed` 和 `fixed` 分别是 `ufixed128x19` 和 `fixed128x19` 的别名。
+
+Solidity 还没有完全支持定长浮点型。可以声明定长浮点型的变量，但不能给它们赋值或把它们赋值给其他变量。。
+
+**地址类型**
+
+`address`：地址类型存储一个 20 字节的值（以太坊地址的大小）。 地址类型也有成员变量，并作为所有合约的基础。
+
+从 0.5.0 版本开始，合约不会从地址类型派生，但仍然可以显式地转换成地址类型。
+
+**地址类型成员变量**
+
+可以使用 `balance` 属性来查询一个地址的余额， 也可以使用 `transfer` 函数向一个地址发送 以太币Ether （以 wei 为单位）：
+
+```js
+address x = 0x123;
+address myAddress = this;
+if (x.balance < 10 && myAddress.balance >= 10) x.transfer(10);
+
+send
+send 是 transfer 的低级版本。如果执行失败，当前的合约不会因为异常而终止，但 send 会返回 false。
+warning:
+	在使用 send 的时候会有些风险：如果调用栈深度是 1024 会导致发送失败（这总是可以被调用者强制），如果接收者用光了 gas 也会导致发送失败。 所以为了保证 以太币Ether 发送的安全，一定要检查 send 的返回值，使用 transfer 或者更好的办法： 使用一种接收者可以取回资金的模式。
+```
+
+uint  256位  为      256/8 = 32 字节           byte32[] 其实也就是32字节是数组  比如      ["0xe68891e79a84e5a4a90000000000000000000000000000000000000000000000"]  （64位）
+
+16进制对应4个比特 比如1001对应 9 . 1个字节对应两个16进制字符     
+
+
+
+string 类型存储[字符串](https://so.csdn.net/so/search?q=字符串&spm=1001.2101.3001.7020)， 在solidity中使用了UTF-8格式来存储字符串。  是可变的字节长度，一般是1-3字节。
+
+汉字占了3个字节，英文和特殊字符占了一个字节           一个汉字 ”天“=》 对应0xe5a4a9
+
+**keccak256**
+
+keccak256算法则可以将任意长度的输入压缩成(32字节)64位[16进制](https://so.csdn.net/so/search?q=16进制&spm=1001.2101.3001.7020)的数，且哈希碰撞的概率近乎为0.
+
+
+
+- `**call`， `callcode` 和 `delegatecall`**
+
+此外，为了与不符合 应用二进制接口Application Binary Interface(ABI) 的合约交互，于是就有了可以接受任意类型任意数量参数的 `call` 函数。 **这些参数会被打包到以 32 字节为单位的连续区域(calldata?)中存放。 其中一个例外是当第一个参数被编码成正好 4 个字节的情况。 在这种情况下，这个参数后边不会填充后续参数编码，以允许使用函数签名。**
+
+```js
+address nameReg = 0x72ba7d8e73fe8eb666ea66babc8116a41bfb10e2;
+nameReg.call("register", "MyName");
+nameReg.call(bytes4(keccak256("fun(uint256)")), a);
+```
+
+`call` 返回的布尔值表明了被调用的函数已经执行完毕（`true`）或者引发了一个 EVM 异常（`false`）。 无法访问返回的真实数据（为此我们需要事先知道编码和大小）。
+
+可以使用 `.gas()` 修饰器modifier 调整提供的 gas 数量
+
+```js
+namReg.call.gas(1000000)("register", "MyName");
+nameReg.call.gas(1000000).value(1 ether)("register", "MyName");
+```
+
+类似地，也可以使用 `delegatecall`： 区别在于只使用给定地址的代码，其它属性（存储，余额，……）都取自当前合约。 `delegatecall` 的目的是使用存储在另外一个合约中的库代码。 用户必须确保两个合约中的存储结构都适用于 delegatecall。 在 homestead 版本之前，只有一个功能类似但作用有限的 `callcode` 的函数可用，但它不能获取委托方的 `msg.sender` 和 `msg.value`。
+
+这三个函数 `call`， `delegatecall` 和 `callcode` 都是非常低级的函数，应该只把它们当作 *最后一招* 来使用，因为它们破坏了 Solidity 的类型安全性。
+
+所有合约都继承了地址（address）的成员变量，因此可以使用 `this.balance` 查询当前合约的余额。
+
+不鼓励使用 `callcode`，在未来也会将其移除。
+
+这三个函数都属于低级函数，需要谨慎使用。 具体来说，任何未知的合约都可能是恶意的。 你在调用一个合约的同时就将控制权交给了它，它可以反过来调用你的合约， 因此，当调用返回时要为你的状态变量的改变做好准备。
 
 
 
 
 
+**定长字节数组**
+
+关键字有：`bytes1`， `bytes2`， `bytes3`， ...， `bytes32`。`byte` 是 `bytes1` 的别名。
+
+- 索引访问：如果 `x` 是 `bytesI` 类型，那么 `x[k]` （其中 `0 <= k < I`）返回第 `k` 个字节（只读）。
+
+可以将 `byte[]` 当作字节数组使用，但这种方式非常浪费存储空间，准确来说，是在传入调用时，每个元素会浪费 31 字节。 更好地做法是使用 `bytes`。（传入调用，参数以32字节打包 ）
+
+**变长字节数组**
+
+`bytes`:
+
+变长字节数组，参见 [数组](https://solidity-cn.readthedocs.io/zh/develop/types.html#arrays)。它并不是值类型。
+
+`string`:
+
+变长 UTF-8 编码字符串类型，参见 [数组](https://solidity-cn.readthedocs.io/zh/develop/types.html#arrays)。并不是值类型。
+
+**枚举类型**
+
+```js
+    // 由于枚举类型不属于 |ABI| 的一部分，因此对于所有来自 Solidity 外部的调用，
+    // "getChoice" 的签名会自动被改成 "getChoice() returns (uint8)"。
+    // 整数类型的大小已经足够存储所有枚举类型的值，随着值的个数增加，
+    // 可以逐渐使用 `uint16` 或更大的整数类型。
+    function getChoice() public view returns (ActionChoices) {
+        return choice;
+    }
+
+    function getDefaultChoice() public pure returns (uint) {
+        return uint(defaultChoice);
+    }
+```
+
+
+
+**函数类型**
+
+函数类型是一种表示函数的类型。可以将一个函数赋值给另一个函数类型的变量，也可以将一个函数作为参数进行传递，还能在函数调用中返回函数类型变量。 函数类型有两类：- *内部（internal）* 函数和 *外部（external）* 函数：
+
+内部函数只能在当前合约内被调用，更具体来说，在当前代码块内，调用一个内部函数是通过跳转到它的入口标签来实现的，就像在当前合约的内部调用一个函数。
+
+外部函数由一个地址和一个函数签名组成，可以通过外部函数调用传递或者返回。
+
+```js
+function (<parameter types>) {internal|external} [pure|constant|view|payable] [returns (<return types>)]
+```
+
+函数类型**默认是内部函数，**因此不需要声明 `internal` 关键字。 与此相反的是，合约中的函数本身默认是 public 的，只有当它被当做类型名称时，默认才是内部函数。
+
+
+
+当前合约的 public 函数既可以被当作内部函数也可以被当作外部函数使用。 如果想将一个函数当作内部函数使用，就用 `f` 调用，如果想将其当作外部函数，使用 `this.f` 。
+
+除此之外，public（或 external）函数也有一个特殊的成员变量称作 `selector`，可以返回 [ABI 函数选择器](https://solidity-cn.readthedocs.io/zh/develop/abi-spec.html#abi-function-selector):
+
+```js
+pragma solidity ^0.4.16;
+
+contract Selector {
+  function f() public view returns (bytes4) {
+    return this.f.selector;
+  }
+}
+```
+
+如果使用内部函数类型的例子:
+
+```js
+pragma solidity ^0.4.16;
+
+library ArrayUtils {
+  // 内部函数可以在内部库函数中使用，
+  // 因为它们会成为同一代码上下文的一部分
+  function map(uint[] memory self, function (uint) pure returns (uint) f)
+    internal
+    pure
+    returns (uint[] memory r)
+  {
+    r = new uint[](self.length);
+    for (uint i = 0; i < self.length; i++) {
+      r[i] = f(self[i]);
+    }
+  }
+  function reduce(
+    uint[] memory self,
+    function (uint, uint) pure returns (uint) f
+  )
+    internal
+    pure
+    returns (uint r)
+  {
+    r = self[0];
+    for (uint i = 1; i < self.length; i++) {
+      r = f(r, self[i]);
+    }
+  }
+  function range(uint length) internal pure returns (uint[] memory r) {
+    r = new uint[](length);
+    for (uint i = 0; i < r.length; i++) {
+      r[i] = i;
+    }
+  }
+}
+
+contract Pyramid {
+  using ArrayUtils for *;
+  function pyramid(uint l) public pure returns (uint) {
+    return ArrayUtils.range(l).map(square).reduce(sum);
+  }
+  function square(uint x) internal pure returns (uint) {
+    return x * x;
+  }
+  function sum(uint x, uint y) internal pure returns (uint) {
+    return x + y;
+  }
+}
+```
+
+
+
+**没看懂**
+
+另外一个使用外部函数类型的例子:
+
+```js
+pragma solidity ^0.4.11;
+
+contract Oracle {
+  struct Request {
+    bytes data;
+    function(bytes memory) external callback;
+  }
+  Request[] requests;
+  event NewRequest(uint);
+  function query(bytes data, function(bytes memory) external callback) public {
+    requests.push(Request(data, callback));
+    NewRequest(requests.length - 1);
+  }
+  function reply(uint requestID, bytes response) public {
+    // 这里要验证 reply 来自可信的源
+    requests[requestID].callback(response);
+  }
+}
+
+contract OracleUser {
+  Oracle constant oracle = Oracle(0x1234567); // 已知的合约
+  function buySomething() {
+    oracle.query("USD", this.oracleResponse);
+  }
+  function oracleResponse(bytes response) public {
+    require(msg.sender == address(oracle));
+    // 使用数据
+  }
+}
+```
+
+**引用类型**
+
+函数参数（包括返回的参数）的数据位置默认是 `memory`， 局部变量的数据位置默认是 `storage`，状态变量的数据位置强制是 `storage` （这是显而易见的, 比如 余额 代码 之类的  需要永久存储）。
+
+也存在第三种数据位置， `calldata` ，这是一块只读的，且不会永久存储的位置，用来存储函数参数。 外部函数的参数（非返回参数）的数据位置被强制指定为 `calldata` ，效果跟 `memory` 差不多。 **（32字节一个单位？）**
+
+数据位置的指定非常重要，因为它们影响着赋值行为： 在 存储storage 和 内存memory 之间两两赋值，或者 存储storage 向状态变量（甚至是从其它状态变量）赋值都会创建一份独立的拷贝。 然而状态变量向局部变量赋值时仅仅传递一个引用，而且这个引用总是指向状态变量，因此后者改变的同时前者也会发生改变。 另一方面，从一个 内存memory 存储的引用类型向另一个 内存memory 存储的引用类型赋值并不会创建拷贝。
+
+```js
+pragma solidity ^0.4.0;
+
+contract C {
+    uint[] x; // x 的数据存储位置是 storage
+
+    // memoryArray 的数据存储位置是 memory
+    function f(uint[] memoryArray) public {
+        x = memoryArray; // 将整个数组拷贝到 storage 中，可行
+        var y = x;  // 分配一个指针（其中 y 的数据存储位置是 storage），可行
+        y[7]; // 返回第 8 个元素，可行
+        y.length = 2; // 通过 y 修改 x，可行
+        delete x; // 清除数组，同时修改 y，可行
+        // 下面的就不可行了；需要在 storage 中创建新的未命名的临时数组， /
+        // 但 storage 是“静态”分配的：
+        // y = memoryArray;              XXXXXXXXXXXXX ???????? 就是说创建只能现在内存创建？然后只能拷贝到storage吗
+        // 下面这一行也不可行，因为这会“重置”指针，
+        // 但并没有可以让它指向的合适的存储位置。
+        // delete y;             XXXXXXXXXXXXX         不能出现空指针
+
+        g(x); // 调用 g 函数，同时移交对 x 的引用
+        h(x); // 调用 h 函数，同时在 memory 中创建一个独立的临时拷贝
+    }
+
+    function g(uint[] storage storageArray) internal {}
+    function h(uint[] memoryArray) public {}
+}
+```
+
+**总结**
+
+- **强制指定的数据位置：**
+
+  **外部函数的参数（不包括返回参数）： calldata**
+
+  **状态变量： storage**
+
+- **默认数据位置：**
+
+  **函数参数（包括返回参数）： memory**
+
+  **所有其它局部变量： storage**
+
+**数组类型**
+
+数组可以在声明时指定长度，也可以动态调整大小。 对于 **存储storage 的数组来说，元素类型可以是任意的**（即元素也可以是数组类型，映射类型或者结构体）。 **对于 内存memory 的数组来说，元素类型不能是映射类型，如果作为 public 函数的参数，它只能是 ABI 类型。**
+
+一个元素类型为 `T`，固定长度为 `k` 的数组可以声明为 `T[k]`，而动态数组声明为 `T[]`。 举个例子，一个长度为 5，元素类型为 `uint` 的动态数组的数组，应声明为 `uint[][5]` （注意这里跟其它语言比，数组长度的声明位置是反的）。 要访问第三个动态数组的第二个元素，你应该使用 x\[2][1]（数组下标是从 0 开始的，且访问数组时的下标顺序与声明时相反，也就是说，x[2] 是从右边减少了一级）。。
+
+`bytes` 和 `string` 类型的变量是特殊的数组。 `bytes` 类似于 `byte[]`，但它在 calldata 中会被“紧打包”（译者注：将元素连续地存在一起，不会按每 32 字节一单元的方式来存放）。 `string` 与 `bytes` 相同，但（暂时）不允许用长度或索引来访问。
+
+> 要访问以字节表示的字符串 `s`，请使用 `bytes(s).length` / `bytes(s)[7] = 'x';`。 注意这时你访问的是 UTF-8 形式的低级 bytes 类型，而不是单个的字符。
+
+**内存数组**
+
+可使用 `new` 关键字在内存中创建变长数组。 与 存储storage 数组相反的是，你 *不能* 通过修改成员变量 `.length` 改变 内存memory 数组的大小。
+
+```js
+contract C {
+    function f(uint len) public pure {
+        uint[] memory a = new uint[](7);
+        bytes memory b = new bytes(len);
+        // 这里我们有 a.length == 7 以及 b.length == len
+        a[6] = 8;
+    }
+}
+```
+
+```js
+contract C {
+    function f() public pure {
+        g([uint(1), 2, 3]);
+    }
+    function g(uint[3] _data) public pure {
+        // ...
+    }
+}
+```
+
+`[1, 2, 3]` 的类型是 `uint8[3] memory`，因为其中的每个字面常数的类型都是 `uint8`。 正因为如此，有必要将上面这个例子中的第一个元素转换成 `uint` 类型。 目前需要注意的是，定长的 内存memory 数组并不能赋值给变长的 内存memory 数组，下面是个反例：
+
+```js
+contract C {
+    function f() public {
+        // 这一行引发了一个类型错误，因为 unint[3] memory
+        // 不能转换成 uint[] memory。
+        uint[] x = [uint(1), 3, 4];
+    }
+}
+```
+
+**length**
+
+数组有 `length` 成员变量表示当前数组的长度。 动态数组可以在 存储storage （而不是 内存memory ）中通过改变成员变量 `.length` 改变数组大小。一经创建，内存memory 数组的大小就是固定的（但却是动态的，也就是说，它依赖于运行时的参数）。
+
+**push**
+
+变长的 存储storage 数组以及 `bytes` 类型（而不是 `string` 类型）都有一个叫做 `push` 的成员函数，它用来附加新的元素到数组末尾。 **这个函数将返回新的数组长度。**
+
+注意在函数中使用结构体时，一个结构体是如何赋值给一个局部变量（默认存储位置是 存储storage ）的。 在这个过程中并没有拷贝这个结构体，而是保存一个引用，所以对局部变量成员的赋值实际上会被写入状态。
+
+当然，你也可以直接访问结构体的成员而不用将其赋值给一个局部变量，就像这样， `campaigns[campaignID].amount = 0`。
+
+**映射**
+
+它们在实际的初始化过程中创建每个可能的 key， 并将其映射到字节形式全是零的值：一个类型的 [默认值](https://solidity-cn.readthedocs.io/zh/develop/control-structures.html#default-value)。然而下面是映射与哈希表不同的地方： **在映射中，实际上并不存储 key，而是存储它的 `keccak256` 哈希值，从而便于查询实际的值。**
+
+也没有 key 的集合或 value 的集合的概念。
+
+只有状态变量（或者在 internal 函数中的对于存储变量的引用）可以使用映射类型。
+
+**删除**
+
+`delete a` 的结果是将 `a` 的类型在初始化时的值赋值给 `a`。即对于整型变量来说，相当于 `a = 0`， 但 delete 也适用于数组，对于动态数组来说，是将数组的长度设为 0，而对于静态数组来说，是将数组中的所有元素重置。 如果对象是结构体，则将结构体中的所有属性重置。
+
+`delete` 对**整个映射是无效的**（因为映射的键可以是任意的，通常也是未知的）。 因此在你删除一个结构体时，结果将重置所有的非映射属性，这个过程是递归进行的，除非它们是映射。 然而**，单个的键及其映射的值是可以被删除的。**
+
+理解 `delete a` 的效果就像是给 `a` 赋值很重要，换句话说，这相当于在 `a` 中存储了一个新的对象。
+
+```js
+pragma solidity ^0.4.0;
+
+contract DeleteExample {
+    uint data;
+    uint[] dataArray;
+
+    function f() public {
+        uint x = data;
+        delete x; // 将 x 设为 0，并不影响数据
+        delete data; // 将 data 设为 0，并不影响 x，因为它仍然有个副本
+        uint[] storage y = dataArray;
+        delete dataArray;
+        // 将 dataArray.length 设为 0，但由于 uint[] 是一个复杂的对象，y 也将受到影响，
+        // 因为它是一个存储位置是 storage 的对象的别名。
+        // 另一方面："delete y" 是非法的，引用了 storage 对象的局部变量只能由已有的 storage 对象赋值。
+         // 也就是必须只想一个storage对象  不能是空指针
+    }
+}
+```
+
+
+
+**隐式转换**
+
+只要值类型之间的转换在语义上行得通，而且转换的过程中没有信息丢失，那么隐式转换基本都是可以实现的： `uint8` 可以转换成 `uint16`，`int128` 转换成 `int256`，但 `int8` 不能转换成 `uint256` （因为 `uint256` 不能涵盖某些值，例如，`-1`）。 更进一步来说，无符号整型可以转换成跟它大小相等或更大的字节类型，但反之不能。 任何可以转换成 `uint160` 的类型都可以转换成 `address` 类型
+
+**显式转换**
+
+```
+int8 y = -3;
+uint x = uint(y);
+```
+
+这段代码的最后，`x` 的值将是 `0xfffff..fd` （64 个 16 进制字符），因为这是 -3 的 256 位补码形式。
+
+如果一个类型显式转换成更小的类型，相应的高位将被舍弃
+
+```
+uint32 a = 0x12345678;
+uint16 b = uint16(a); // 此时 b 的值是 0x5678
+```
+
+
+
+**warning:**
+
+类型只能从第一次赋值中推断出来，因此以下代码中的循环是无限的， 原因是``i`` 的类型是 `uint8`，而这个类型变量的最大值比 `2000` 小。 `for (var i = 0; i < 2000; i++) { ... }`
+
+
+
+### 单位和全局变量
+
+区块和交易属性
+
+**block.blockhash(uint blockNumber) returns (bytes32)：指定区块的区块哈希——仅可用于最新的 256 个区块且不包括当前区块；而 blocks 从 0.4.22 版本开始已经不推荐使用，由 blockhash(uint blockNumber) 代替**
+**block.coinbase (address): 挖出当前区块的矿工地址**
+**block.difficulty (uint): 当前区块难度**
+**block.gaslimit (uint): 当前区块 gas 限额**
+**block.number (uint): 当前区块号**
+**block.timestamp (uint): 自 unix epoch 起始当前区块以秒计的时间戳**
+**gasleft() returns (uint256)：剩余的 gas**
+**msg.data (bytes): 完整的 calldata**
+**msg.gas (uint): 剩余 gas - 自 0.4.21 版本开始已经不推荐使用，由 gesleft() 代替**
+**msg.sender (address): 消息发送者（当前调用）**
+**msg.sig (bytes4): calldata 的前 4 字节（也就是函数标识符）**
+**msg.value (uint): 随消息发送的 wei 的数量**
+**now (uint): 目前区块时间戳（block.timestamp）**
+**tx.gasprice (uint): 交易的 gas 价格**
+**tx.origin (address): 交易发起者（完全的调用链）**
+
+ **note** : 对于每一个**外部函数**调用，包括 msg.sender 和 msg.value 在内所有 msg 成员的值都会变化。这里包括对库函数的调用。
+
+> 不要依赖 `block.timestamp`、 `now` 和 `blockhash` 产生随机数，除非你知道自己在做什么
+>
+> 时间戳和区块哈希在一定程度上都可能受到挖矿矿工影响。例如，挖矿社区中的恶意矿工可以用某个给定的哈希来运行赌场合约的 payout 函数，而如果他们没收到钱，还可以用一个不同的哈希重新尝试。
+
+
+
+基于可扩展因素，区块哈希不是对所有区块都有效。你仅仅可以访问最近 256 个区块的哈希，其余的哈希均为零。
+
+**错误处理**
+
+>`assert(bool condition)`:
+>
+>如果条件不满足，则使当前交易没有效果 — 用于检查内部错误。
+>
+>`require(bool condition)`:
+>
+>如果条件不满足则撤销状态更改 - 用于检查由输入或者外部组件引起的错误。
+>
+>`require(bool condition, string message)`:
+>
+>如果条件不满足则撤销状态更改 - 用于检查由输入或者外部组件引起的错误，可以同时提供一个错误消息。
+>
+>`revert()`:
+>
+>终止运行并撤销状态更改。
+>
+>`revert(string reason)`:
+>
+>终止运行并撤销状态更改，可以同时提供一个解释性的字符串。
+
+**地址相关**
+
+`<address>.balance` (`uint256`):
+
+以 Wei 为单位的 [地址类型](https://solidity-cn.readthedocs.io/zh/develop/types.html#address) 的余额。
+
+`<address>.transfer(uint256 amount)`:
+
+向 [地址类型](https://solidity-cn.readthedocs.io/zh/develop/types.html#address) 发送数量为 amount 的 Wei，失败时抛出异常，发送 2300 gas 的矿工费，不可调节。
+
+`<address>.send(uint256 amount) returns (bool)`:
+
+向 [地址类型](https://solidity-cn.readthedocs.io/zh/develop/types.html#address) 发送数量为 amount 的 Wei，失败时返回 `false`，发送 2300 gas 的矿工费用，不可调节。
+
+`<address>.call(...) returns (bool)`:
+
+发出低级函数 `CALL`，失败时返回 `false`，发送所有可用 gas，可调节。
+
+`<address>.callcode(...) returns (bool)`：
+
+发出低级函数 `CALLCODE`，失败时返回 `false`，发送所有可用 gas，可调节。
+
+`<address>.delegatecall(...) returns (bool)`:
+
+发出低级函数 `DELEGATECALL`，失败时返回 `false`，发送所有可用 gas，可调节。
+
+
+
+>使用 send 有很多危险：如果调用栈深度已经达到 1024（这总是可以由调用者所强制指定），转账会失败；并且如果接收者用光了 gas，转账同样会失败。为了保证以太币转账安全，总是检查 `send` 的返回值，利用 `transfer` 或者下面更好的方式： 用这种接收者取回钱的模式。
+
+>如果在通过低级函数 delegatecall 发起调用时需要访问存储中的变量，那么这两个合约的存储中的变量定义顺序需要一致，以便被调用的合约代码可以正确地通过变量名访问合约的存储变量。 这当然不是指像在高级的库函数调用时所传递的存储变量指针那样的情况。
+
+**合约相关**
+
+- `this` (current contract's type):
+
+  当前合约，可以明确转换为 [地址类型](https://solidity-cn.readthedocs.io/zh/develop/types.html#address)。
+
+- `selfdestruct(address recipient)`:
+
+  销毁合约，并把余额发送到指定 [地址类型](https://solidity-cn.readthedocs.io/zh/develop/types.html#address)。
+
+- `suicide(address recipient)`:
+
+  与 selfdestruct 等价，但已不推荐使用。
+
+
+
+### 表达式和控制结构
+
+输出
+
+```js
+contract Simple {
+    function arithmetics(uint _a, uint _b)
+        public
+        pure
+        returns (uint o_sum, uint o_product)
+    {
+        o_sum = _a + _b;
+        o_product = _a * _b;
+    }
+}
+```
+
+输出参数名可以被省略。输出值也可以使用 `return` 语句指定。 `return` 语句也可以返回多值，参阅：ref:multi-return。 返回的输出参数被初始化为 0；如果它们没有被显式赋值，它们就会一直为 0。
+
+**内部函数调用**
+
+当前合约中的函数可以直接（“从内部”）调用，也可以递归调用
+
+**外部函数调用**
+
+```js
+如果想要调用其他合约的函数，需要外部调用。对于一个外部调用，所有的函数参数都需要被复制到内存。
+当调用其他合约的函数时，随函数调用发送的 Wei 和 gas 的数量可以分别由特定选项 .value() 和 .gas() 指定:
+
+pragma solidity ^0.4.0;
+
+contract InfoFeed {
+    function info() public payable returns (uint ret) { return 42; }
+}
+
+contract Consumer {
+    InfoFeed feed;
+    function setFeed(address addr) public { feed = InfoFeed(addr); }
+    function callFeed() public { feed.info.value(10).gas(800)(); }  // .value()用于转账
+}
+```
+
+`payable` 修饰符要用于修饰 `info`，否则，.value() 选项将不可用。
+
+`feed.info.value(10).gas(800)` 只（局部地）设置了与函数调用一起发送的 Wei 值和 gas 的数量，只有最后的圆括号执行了真正的调用。如果被调函数所在合约不存在（也就是账户中不包含代码）或者被调用合约本身抛出异常或者 gas 用完等，函数调用会抛出异常。
+
+通过 `new` **创建合约**
+
+```js
+pragma solidity ^0.4.0;
+
+contract D {
+    uint x;
+    function D(uint a) public payable {
+        x = a;
+    }
+}
+
+contract C {
+    D d = new D(4); // 将作为合约 C 构造函数的一部分执行
+
+    function createD(uint arg) public {
+        D newD = new D(arg);
+    }
+
+    function createAndEndowD(uint arg, uint amount) public payable {
+                //随合约的创建发送 ether
+        D newD = (new D).value(amount)(arg);
+    }
+}
+```
+
+如示例中所示，使用 `.value（）` 选项创建 `D` 的实例时可以转发 Ether，但是不可能限制 gas 的数量。如果创建失败（可能因为栈溢出，或没有足够的余额或其他问题），会引发异常。
+
+**元组**
+
+Solidity 内部允许元组 (tuple) 类型，也就是一个在编译时元素数量固定的对象列表，列表中的元素可以是不同类型的对象。这些元组可以用来同时返回多个数值，也可以用它们来同时给多个新声明的变量或者既存的变量（或通常的 LValues）：
+
+**错误**
+
+`revert` 函数可以用来标记错误并恢复当前的调用。 `revert` 调用中包含有关错误的详细信息是可能的，这个消息会被返回给调用者。
+
+`assert` 函数只能用于测试内部错误，并检查非变量。 `require` 函数用于确认条件有效性，例如输入变量，或合约状态变量是否满足条件，或验证外部合约调用返回的值。
+
+
+
+**warning:**
+
+> 作为 EVM 设计的一部分，如果被调用合约帐户不存在，则低级函数 `call` ， `delegatecall` 和 `callcode` 将返回 success。因此如果需要使用低级函数时，必须在调用之前检查被调用合约是否存在。
 
 
 
 
 
+## 合约
 
+Solidity 合约类似于面向对象语言中的类。合约中有用于数据持久化的状态变量，和可以修改状态变量的函数。 调用另一个合约实例的函数时，会执行一个 EVM 函数调用，这个操作会切换执行时的上下文，这样，前一个合约的状态变量就不能访问了。
 
+**创建合约**
 
+```js
+pragma solidity ^0.4.16;
 
+contract OwnedToken {
+    // TokenCreator 是如下定义的合约类型.
+    // 不创建新合约的话，也可以引用它。
+    TokenCreator creator;
+    address owner;
+    bytes32 name;
 
+    // 这是注册 creator 和设置名称的构造函数。
+    function OwnedToken(bytes32 _name) public {
+        // 状态变量通过其名称访问，而不是通过例如 this.owner 的方式访问。
+        // 这也适用于函数，特别是在构造函数中，你只能像这样（“内部地”）调用它们，
+        // 因为合约本身还不存在。 不能直接使用this 指针
+        owner = msg.sender;
+        // 从 `address` 到 `TokenCreator` ，是做显式的类型转换
+        // 并且假定调用合约的类型是 TokenCreator，没有真正的方法来检查这一点。
+        creator = TokenCreator(msg.sender);
+        name = _name;
+    }
 
+    function changeName(bytes32 newName) public {
+        // 只有 creator （即创建当前合约的合约）能够更改名称 —— 因为合约是隐式转换为地址的，
+        // 所以这里的比较是可行的。
+        if (msg.sender == address(creator))
+            name = newName;
+    }
 
+    function transfer(address newOwner) public {
+        // 只有当前所有者才能发送 token。
+        if (msg.sender != owner) return;
+        // 我们也想询问 creator 是否可以发送。
+        // 请注意，这里调用了一个下面定义的合约中的函数。
+        // 如果调用失败（比如，由于 gas 不足），会立即停止执行。
+        if (creator.isTokenTransferOK(owner, newOwner))
+            owner = newOwner;
+    }
+}
 
+contract TokenCreator {
+    function createToken(bytes32 name)
+       public
+       returns (OwnedToken tokenAddress)
+    {
+        // 创建一个新的 Token 合约并且返回它的地址。
+        // 从 JavaScript 方面来说，返回类型是简单的 `address` 类型，因为
+        // 这是在 ABI 中可用的最接近的类型。
+        return new OwnedToken(name);
+    }
 
+    function changeName(OwnedToken tokenAddress, bytes32 name)  public {
+        // 同样，`tokenAddress` 的外部类型也是 `address` 。
+        tokenAddress.changeName(name);
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    function isTokenTransferOK(address currentOwner, address newOwner)
+        public
+        view
+        returns (bool ok)
+    {
+        // 检查一些任意的情况。
+        address tokenAddress = msg.sender;
+        return (keccak256(newOwner) & 0xff) == (bytes20(tokenAddress) & 0xff);
+    }
+}
+```
 
 
 
