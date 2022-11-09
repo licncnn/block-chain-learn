@@ -288,8 +288,8 @@ function emergencyWithdraw() external {
 
 function processRefunds() external {
   require(block.timestamp > expiresAt, "Auction still in progress");
-  uint256 _refundProgress = refundProgress;
-  uint256 _bidIndex = bidIndex;
+  uint256 _refundProgress = refundProgress; // 退款的人数 
+  uint256 _bidIndex = bidIndex; // 参与竞拍的人数
   require(_refundProgress < _bidIndex, "Refunds already processed");
   
   uint256 gasUsed;
@@ -321,7 +321,8 @@ function processRefunds() external {
 
 function claimProjectFunds() external onlyOwner {
     require(block.timestamp > expiresAt, "Auction still in progress");  // 提款必须在所有的拍卖进程完成后进行。
-    require(refundProgress >= totalBids, "Refunds not yet processed");  //  提款只能在所有用户都完成退款后才可以提款。
+    require(refundProgress >= totalBids, "Refunds not yet processed"); 
+    //  提款只能在所有用户都完成退款后才可以提款。
     require(akuNFTs.airdropProgress() >= totalBids, "Airdrop not complete"); // 空投全部完成后才可以提款
 
     (bool sent, ) = project.call{value: address(this).balance}("");
@@ -339,16 +340,9 @@ function getAuctionDetails(address user) external view returns(uint256 remaining
 ```
 
 
-
-
-
-
 防护措施
 1.使用tx.origin 防止本合约调用外部合约   https://blog.csdn.net/sooxin/article/details/124372249
-2.
-3.安全开发指南 https://github.com/ConsenSys/smart-contract-best-practices/blob/master/README-zh.md
-4.
-5.
+2.安全开发指南 https://github.com/ConsenSys/smart-contract-best-practices/blob/master/README-zh.md
 
 
 
