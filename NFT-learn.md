@@ -96,13 +96,13 @@ LarvaLabs的CryptoPunks是第一个基于PFP类型的NFT 项目。 所有CryptoP
 
 合约地址  https://etherscan.io/address/0xf42c318dbfbaab0eee040279c6a2588fa01a961d
 
-发布交易 ![1667899888610](C:\Users\liyufeng\Desktop\block-chain-learn\assets\16678asdasfasf99888610.png)
+发布交易的交易![1667899888610](.\assets\16678asdasfasf99888610.png)
 
 分析一下这笔交易个各个参数
 
 对于任意一个交易
 
-![isg](.\assets\24719032-d44ea1031ac7d5d0.webp)
+<img src=".\assets\24719032-d44ea1031ac7d5d0.webp" alt="isg" style="zoom:50%;" />
 
 Transaction Fee: 该交易需要的手续费，Transaction Fee = Gas Price * Gas Used，对应上面的数据就是：Transaction Fee = 82.768620951 * 46458 = 3845264.592141558 Gwei = 0.003845264592141558 ETH
 
@@ -128,7 +128,7 @@ Burnt & Txn Savings Fees**：燃烧掉的 Gas，Burnt = Gas Base * Gas Used；Tx
 
 
 
-**AkuAuction**
+==**AkuAuction**==
 
 它使用了一种比较独特的荷兰拍方式。
 传统的拍卖方式是设置一个低价，然后大家向上叫价，最终出价最高者可购买，这是英式拍卖；
@@ -136,6 +136,12 @@ Burnt & Txn Savings Fees**：燃烧掉的 Gas，Burnt = Gas Base * Gas Used；Tx
 荷兰拍更考验人性，因为每个人都想等最低价，但是都怕别人先于自己购买。
 
 
+
+1.合约没有reanfi的保护   2.没有禁止合约之间的调用
+
+3.是一个分发的代码  相当于是dauge auction的代码  不涉及任何的nft  mint合约与token合约是分开的
+
+4.荷兰拍 ， 价格往下降的时候，如果是高价买入，则合约会自动补差价
 
 ```js
 // File: workspaces/default_workspace/samuraisanta.sol
@@ -286,7 +292,7 @@ function emergencyWithdraw() external {
     require(sent, "Failed to refund bidder");
 }
 
-function processRefunds() external {
+function processRefunds() external {  // 荷兰拍  大规模补差价的函数  external
   require(block.timestamp > expiresAt, "Auction still in progress");
   uint256 _refundProgress = refundProgress; // 退款的人数 
   uint256 _bidIndex = bidIndex; // 参与竞拍的人数
@@ -306,6 +312,7 @@ function processRefunds() external {
         }
         allBids[i].finalProcess = 1;
         if (refund > 0) {
+            // 谁都可以调用 并且涉及了金钱的转移    1.禁止合约call 合约  2.only owner call 3.金钱转移
             (bool sent, ) = bidData.bidder.call{value: refund}("");  //vulnable  call返回true of false 
             require(sent, "Failed to refund bidder");
         }
