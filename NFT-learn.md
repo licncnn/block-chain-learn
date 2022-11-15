@@ -141,7 +141,7 @@ Burnt & Txn Savings Fees**：燃烧掉的 Gas，Burnt = Gas Base * Gas Used；Tx
 
 3.是一个分发的代码  相当于是dauge auction的代码  不涉及任何的nft  mint合约与token合约是分开的
 
-4.荷兰拍 ， 价格往下降的时候，如果是高价买入，则合约会自动补差价
+4.荷兰拍 ， 价格随着时间下降的时候，如果是高价买入，则合约会自动补差价
 
 ```js
 // File: workspaces/default_workspace/samuraisanta.sol
